@@ -28,7 +28,7 @@ xpybExt_init(xpybExt *self, PyObject *args)
     xpybExtkey *key = (xpybExtkey *)Py_None;
 
     if (!PyArg_ParseTuple(args, "O!|O!", &xpybConn_type, &conn, &xpybExtkey_type, &key))
-	return -1;
+        return -1;
 
     Py_INCREF(self->key = key);
     Py_INCREF(self->conn = conn);
@@ -105,15 +105,19 @@ xpybExt_send_request(xpybExt *self, PyObject *args, PyObject *kw)
                                      xpybRequest_type, &request,
                                      &xpybCookie_type, &cookie,
                                      &PyType_Type, &reply))
-	return NULL;
+        return NULL;
 
     xpybRequest_get_attributes(request, &is_void, &opcode, &is_checked);
 
     if (!is_void)
-	if (reply == NULL || !PyType_IsSubtype(reply, xpybReply_type)) {
-	    PyErr_SetString(xpybExcept_base, "Reply type missing or not derived from xcb.Reply.");
-	    return NULL;
-	}
+        if (reply == NULL || !PyType_IsSubtype(reply, xpybReply_type)) {
+            PyErr_SetString(xpybExcept_base, "Reply type missing or not derived from xcb.Reply.");
+            return NULL;
+        }
+
+    /* Check the connection */
+    if (xpybConn_invalid(self->conn))
+	return NULL;
 
     /* Set up request structure */
     xcb_req.count = 2;
@@ -123,7 +127,7 @@ xpybExt_send_request(xpybExt *self, PyObject *args, PyObject *kw)
 
     /* Allocate and fill in data strings */
     if (PyObject_AsReadBuffer(((xpybProtobj *)request)->buf, &data, &size) < 0)
-	return NULL;
+        return NULL;
     xcb_parts[2].iov_base = (void *)data;
     xcb_parts[2].iov_len = size;
     xcb_parts[3].iov_base = 0;
@@ -180,7 +184,7 @@ int xpybExt_modinit(PyObject *m)
         return -1;
     Py_INCREF(&xpybExt_type);
     if (PyModule_AddObject(m, "Extension", (PyObject *)&xpybExt_type) < 0)
-	return -1;
+        return -1;
 
     return 0;
 }

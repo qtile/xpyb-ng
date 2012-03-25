@@ -1,0 +1,11 @@
+xpyb-ng (1.3-precise2) precise; urgency=low
+
+  * (Potentially?) fix a build error
+
+ -- Tycho Andersen <tycho@tycho.ws>  Sat, 27 Feb 2012 17:40:09 -0600
+
+xpyb-ng (1.3-precise1) precise; urgency=low
+
+  * Initial release
+
+ -- Tycho Andersen <tycho@tycho.ws>  Sat, 11 Feb 2012 17:40:09 -0600

@@ -1,5 +1,5 @@
 
-qtile-ng uses Python distutils. Installation should be as simple as:
+xpyb-ng uses Python distutils. Installation should be as simple as:
 
     python setup.py install
 

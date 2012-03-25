@@ -41,21 +41,21 @@ xpybError_set(xpybConn *conn, xcb_generic_error_t *e)
     except = xpybExcept_proto;
 
     if (e) {
-	opcode = e->error_code;
-	if (opcode < conn->errors_len && conn->errors[opcode] != NULL) {
-	    type = PyTuple_GET_ITEM(conn->errors[opcode], 0);
-	    except = PyTuple_GET_ITEM(conn->errors[opcode], 1);
-	}
+        opcode = e->error_code;
+        if (opcode < conn->errors_len && conn->errors[opcode] != NULL) {
+            type = PyTuple_GET_ITEM(conn->errors[opcode], 0);
+            except = PyTuple_GET_ITEM(conn->errors[opcode], 1);
+        }
 
-	shim = PyBuffer_FromMemory(e, sizeof(*e));
-	if (shim == NULL)
-	    return 1;
+        shim = PyBuffer_FromMemory(e, sizeof(*e));
+        if (shim == NULL)
+            return 1;
 
-	error = PyObject_CallFunctionObjArgs(type, shim, NULL);
-	if (error != NULL)
-	    PyErr_SetObject(except, error);
-	Py_DECREF(shim);
-	return 1;
+        error = PyObject_CallFunctionObjArgs(type, shim, NULL);
+        if (error != NULL)
+            PyErr_SetObject(except, error);
+        Py_DECREF(shim);
+        return 1;
     }
     return 0;
 }
@@ -67,13 +67,13 @@ xpybEvent_create(xpybConn *conn, xcb_generic_event_t *e)
     PyObject *shim, *event, *type = (PyObject *)xpybEvent_type;
 
     if (opcode < conn->events_len && conn->events[opcode] != NULL)
-	type = conn->events[opcode];
+        type = conn->events[opcode];
 
     shim = PyBuffer_FromMemory(e, sizeof(*e));
     if (shim == NULL)
-	return NULL;
+        return NULL;
 
-    event = PyObject_CallFunctionObjArgs(type, shim, NULL);
+    event = PyObject_CallFunction(type, "Oi", shim, 0);
     Py_DECREF(shim);
     return event;
 }
@@ -97,12 +97,12 @@ xpybProtobj_init(xpybProtobj *self, PyObject *args, PyObject *kw)
     PyObject *parent;
 
     if (!PyArg_ParseTupleAndKeywords(args, kw, "O|nn", kwlist,
-				     &parent, &offset, &size))
-	return -1;
+                                     &parent, &offset, &size))
+        return -1;
 
     self->buf = PyBuffer_FromObject(parent, offset, size);
     if (self->buf == NULL)
-	return -1;
+        return -1;
 
     return 0;
 }
@@ -111,7 +111,6 @@ static void
 xpybProtobj_dealloc(xpybProtobj *self)
 {
     Py_CLEAR(self->buf);
-    free(self->data);
     self->ob_type->tp_free((PyObject *)self);
 }
 

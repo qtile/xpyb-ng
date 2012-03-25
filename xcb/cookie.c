@@ -23,7 +23,7 @@ static void
 xpybCookie_dealloc(xpybCookie *self)
 {
     if (self->conn->conn)
-	xcb_discard_reply(self->conn->conn, self->cookie.sequence);
+        xcb_discard_reply(self->conn->conn, self->cookie.sequence);
 
     Py_CLEAR(self->reply_type);
     Py_CLEAR(self->request);
@@ -50,15 +50,15 @@ xpybCookie_check(xpybCookie *self, PyObject *args)
     xpybRequest_get_attributes(self->request, &is_void, NULL, &is_checked);
 
     if (!(is_void && is_checked)) {
-	PyErr_SetString(xpybExcept_base, "Request is not void and checked.");
-	return NULL;
+        PyErr_SetString(xpybExcept_base, "Request is not void and checked.");
+        return NULL;
     }
     if (xpybConn_invalid(self->conn))
-	return NULL;
+        return NULL;
 
     error = xcb_request_check(self->conn->conn, self->cookie);
     if (xpybError_set(self->conn, error))
-	return NULL;
+        return NULL;
 
     Py_RETURN_NONE;
 }
@@ -70,35 +70,44 @@ xpybCookie_reply(xpybCookie *self, PyObject *args)
     xcb_generic_reply_t *data;
     PyObject *shim, *reply;
     int is_void;
+    void *buf;
+    Py_ssize_t len;
 
     xpybRequest_get_attributes(self->request, &is_void, NULL, NULL);
 
     /* Check arguments and connection. */
     if (is_void) {
-	PyErr_SetString(xpybExcept_base, "Request has no reply.");
-	return NULL;
+        PyErr_SetString(xpybExcept_base, "Request has no reply.");
+        return NULL;
     }
     if (xpybConn_invalid(self->conn))
-	return NULL;
+        return NULL;
 
     /* Make XCB call */
     data = xcb_wait_for_reply(self->conn->conn, self->cookie.sequence, &error);
     if (xpybError_set(self->conn, error))
-	return NULL;
+        return NULL;
     if (data == NULL) {
-	PyErr_SetString(PyExc_IOError, "I/O error on X server connection.");
-	return NULL;
+        PyErr_SetString(PyExc_IOError, "I/O error on X server connection.");
+        return NULL;
     }
 
     /* Create a shim protocol object */
-    shim = PyBuffer_FromMemory(data, 32 + data->length * 4);
+    shim = PyBuffer_New(32 + data->length * 4);
     if (shim == NULL)
-	goto err1;
+        goto err1;
+    if (PyObject_AsWriteBuffer(shim, &buf, &len) < 0)
+        goto err2;
+    memcpy(buf, data, len);
+    free(data);
 
     /* Call the reply type object to get a new xcb.Reply instance */
     reply = PyObject_CallFunctionObjArgs((PyObject *)self->reply_type, shim, NULL);
     Py_DECREF(shim);
     return reply;
+
+err2:
+    Py_DECREF(shim);
 err1:
     free(data);
     return NULL;
@@ -144,7 +153,7 @@ int xpybCookie_modinit(PyObject *m)
         return -1;
     Py_INCREF(&xpybCookie_type);
     if (PyModule_AddObject(m, "Cookie", (PyObject *)&xpybCookie_type) < 0)
-	return -1;
+        return -1;
 
     return 0;
 }

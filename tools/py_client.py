@@ -253,12 +253,12 @@ def _py_get_length_field(expr):
     For fields that follow a variable-length field, use the accessor.
     Otherwise, just reference the structure field directly.
     '''
-    if expr.lenfield_name != None:
-        # This would be nicer if Request had an is_request attribute...
-        if hasattr(expr.parent.parent, "opcode"):
-            return expr.lenfield_name
-        else:
-            return 'self.%s' % expr.lenfield_name
+    if expr.lenfield_name is not None:
+        for grandparent in expr.parent.parents:
+            # This would be nicer if Request had an is_request attribute...
+            if hasattr(grandparent, "opcode"):
+                return expr.lenfield_name
+        return 'self.%s' % expr.lenfield_name
     else:
         return str(expr.nmemb)
 
@@ -294,7 +294,6 @@ def _py_type_alignsize(field):
         
 def _py_complex(self, name):
     need_alignment = False
-    _py('        count = 0')
 
     for field in self.fields:
         if field.auto:
@@ -309,33 +308,33 @@ def _py_complex(self, name):
 
         (format, size, list) = _py_flush_format()
         if len(list) > 0:
-            _py('        (%s,) = unpack_from(\'%s\', self, count)', list, format)
+            _py('        (%s,) = unpack_from(\'%s\', parent, offset)', list, format)
         if size > 0:
-            _py('        count += %d', size)
+            _py('        offset += %d', size)
 
         if need_alignment:
-            _py('        count += xcb.type_pad(%d, count)', _py_type_alignsize(field))
+            _py('        offset += xcb.type_pad(%d, offset)', _py_type_alignsize(field))
         need_alignment = True
 
         if field.type.is_list:
-            _py('        self.%s = xcb.List(self, count, %s, %s, %d)', _n(field.field_name), _py_get_expr(field.type.expr), field.py_listtype, field.py_listsize)
-            _py('        count += len(self.%s.buf())', _n(field.field_name))
+            _py('        self.%s = xcb.List(parent, offset, %s, %s, %d)', _n(field.field_name), _py_get_expr(field.type.expr), field.py_listtype, field.py_listsize)
+            _py('        offset += len(self.%s.buf())', _n(field.field_name))
         elif field.type.is_container and field.type.fixed_size():
-            _py('        self.%s = %s(self, count, %s)', _n(field.field_name), field.py_type, field.type.size)
-            _py('        count += %s', field.type.size)
+            _py('        self.%s = %s(parent, offset, %s)', _n(field.field_name), field.py_type, field.type.size)
+            _py('        offset += %s', field.type.size)
         else:
-            _py('        self.%s = %s(self, count)', _n(field.field_name), field.py_type)
-            _py('        count += len(self.%s)', _n(field.field_name))
+            _py('        self.%s = %s(parent, offset)', _n(field.field_name), field.py_type)
+            _py('        offset += len(self.%s)', _n(field.field_name))
 
     (format, size, list) = _py_flush_format()
     if len(list) > 0:
         if need_alignment:
-            _py('        count += xcb.type_pad(4, count)')
-        _py('        (%s,) = unpack_from(\'%s\', self, count)', list, format)
-        _py('        count += %d', size)
+            _py('        offset += xcb.type_pad(4, offset)')
+        _py('        (%s,) = unpack_from(\'%s\', parent, offset)', list, format)
+        _py('        offset += %d', size)
 
     if self.fixed_size() or self.is_reply:
-        if len(self.fields) > 0:
+        if self.fields and not all(field.auto or field.type.is_pad for field in self.fields):
             _py_popline()
 
 def py_struct(self, name):
@@ -353,11 +352,12 @@ def py_struct(self, name):
     else:
         _py('    def __init__(self, parent, offset):')
         _py('        xcb.Struct.__init__(self, parent, offset)')
+        _py('        base = offset')
 
     _py_complex(self, name)
 
     if not self.fixed_size():
-        _py('        xcb._resize_obj(self, count)')
+        _py('        xcb._resize_obj(self, offset - base)')
 
 def py_union(self, name):
     '''
@@ -374,25 +374,28 @@ def py_union(self, name):
     else:
         _py('    def __init__(self, parent, offset):')
         _py('        xcb.Union.__init__(self, parent, offset)')
-
-    _py('        count = 0')
+        _py('        size = 0')
 
     for field in self.fields:
         if field.type.is_simple:
-            _py('        self.%s = unpack_from(\'%s\', self)', _n(field.field_name), field.type.py_format_str)
-            _py('        count = max(count, %s)', field.type.size)
+            _py('        self.%s = unpack_from(\'%s\', parent, offset)', _n(field.field_name), field.type.py_format_str)
+            if not self.fixed_size():
+                _py('        size = max(size, %s)', field.type.size)
         elif field.type.is_list:
-            _py('        self.%s = xcb.List(self, 0, %s, %s, %s)', _n(field.field_name), _py_get_expr(field.type.expr), field.py_listtype, field.py_listsize)
-            _py('        count = max(count, len(self.%s.buf()))', _n(field.field_name))
+            _py('        self.%s = xcb.List(parent, offset, %s, %s, %s)', _n(field.field_name), _py_get_expr(field.type.expr), field.py_listtype, field.py_listsize)
+            if not self.fixed_size():
+                _py('        size = max(size, len(self.%s.buf()))', _n(field.field_name))
         elif field.type.is_container and field.type.fixed_size():
-            _py('        self.%s = %s(self, 0, %s)', _n(field.field_name), field.py_type, field.type.size)
-            _py('        count = max(count, %s)', field.type.size)
+            _py('        self.%s = %s(parent, offset, %s)', _n(field.field_name), field.py_type, field.type.size)
+            if not self.fixed_size():
+                _py('        size = max(size, %s)', field.type.size)
         else:
-            _py('        self.%s = %s(self, 0)', _n(field.field_name), field.py_type)
-            _py('        count = max(count, len(self.%s))', _n(field.field_name))
+            _py('        self.%s = %s(parent, offset)', _n(field.field_name), field.py_type)
+            if not self.fixed_size():
+                _py('        size = max(size, len(self.%s))', _n(field.field_name))
 
     if not self.fixed_size():
-        _py('        xcb._resize_obj(self, count)')
+        _py('        xcb._resize_obj(self, size)')
 
 def _py_reply(self, name):
     '''
@@ -403,8 +406,8 @@ def _py_reply(self, name):
     _py_setlevel(0)
     _py('')
     _py('class %s(xcb.Reply):', self.py_reply_name)
-    _py('    def __init__(self, parent):')
-    _py('        xcb.Reply.__init__(self, parent)')
+    _py('    def __init__(self, parent, offset=0):')
+    _py('        xcb.Reply.__init__(self, parent, offset)')
 
     _py_complex(self, name)
     
@@ -473,24 +476,24 @@ def _py_request_helper(self, name, void, regular):
 
         (format, size, list) = _py_flush_format()
         if size > 0:
-            _py('        buf.write(pack(\'%s\', %s))', format, list)
+            _py('        buf.write(pack(\'=%s\', %s))', format, list)
 
         if field.type.is_expr:
-            _py('        buf.write(pack(\'%s\', %s))', field.type.py_format_str, _py_get_expr(field.type.expr))
+            _py('        buf.write(pack(\'=%s\', %s))', field.type.py_format_str, _py_get_expr(field.type.expr))
         elif field.type.is_pad:
             _py('        buf.write(pack(\'%sx\'))', field.type.nmemb)
         elif field.type.is_container:
             _py('        for elt in xcb.Iterator(%s, %d, \'%s\', False):', _n(field.field_name), field.type.py_format_len, _n(field.field_name))
-            _py('            buf.write(pack(\'%s\', *elt))', field.type.py_format_str)
+            _py('            buf.write(pack(\'=%s\', *elt))', field.type.py_format_str)
         elif field.type.is_list and field.type.member.is_simple:
             _py('        buf.write(str(buffer(array(\'%s\', %s))))', field.type.member.py_format_str, _n(field.field_name))
         else:
             _py('        for elt in xcb.Iterator(%s, %d, \'%s\', True):', _n(field.field_name), field.type.member.py_format_len, _n(field.field_name))
-            _py('            buf.write(pack(\'%s\', *elt))', field.type.member.py_format_str)
+            _py('            buf.write(pack(\'=%s\', *elt))', field.type.member.py_format_str)
 
     (format, size, list) = _py_flush_format()
     if size > 0:
-        _py('        buf.write(pack(\'%s\', %s))', format, list)
+        _py('        buf.write(pack(\'=%s\', %s))', format, list)
 
     _py('        return self.send_request(xcb.Request(buf.getvalue(), %s, %s, %s),', self.opcode, _b(void), _b(func_flags))
     _py('                                 %s()%s', func_cookie, ')' if void else ',')
@@ -531,8 +534,8 @@ def py_event(self, name):
     _py_setlevel(0)
     _py('')
     _py('class %s(xcb.Event):', self.py_event_name)
-    _py('    def __init__(self, parent):')
-    _py('        xcb.Event.__init__(self, parent)')
+    _py('    def __init__(self, parent, offset=0):')
+    _py('        xcb.Event.__init__(self, parent, offset)')
 
     _py_complex(self, name)
 
@@ -550,8 +553,8 @@ def py_error(self, name):
     _py_setlevel(0)
     _py('')
     _py('class %s(xcb.Error):', self.py_error_name)
-    _py('    def __init__(self, parent):')
-    _py('        xcb.Error.__init__(self, parent)')
+    _py('    def __init__(self, parent, offset=0):')
+    _py('        xcb.Error.__init__(self, parent, offset)')
 
     _py_complex(self, name)
 

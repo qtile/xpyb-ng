@@ -1,0 +1,6 @@
+Format: http://dep.debian.net/deps/dep5
+Upstream-Name: xpybng
+Source: <http://github.com/tych0/xpyb-ng>
+
+Files: *
+License: public domain

@@ -1,0 +1,13 @@
+Source: xpyb-ng
+Section: universe/python
+Priority: optional
+Maintainer: Tycho Andersen <tycho@tycho.ws>
+Build-Depends: debhelper (>= 8.0.0), libxcb1-dev, python-dev, python-xcbgen, xcb-proto
+Standards-Version: 3.9.2
+Homepage: <http://github.com/tych0/xpyb-ng>
+Vcs-Git: git@github.com:tych0/xpyb-ng.git
+
+Package: python-xpybng
+Architecture: any
+Depends: libc6 (>= 2.2.5), libxcb1, python (<< 2.8), python (>= 2.6), python-support (>= 0.90.0)
+Description: A fork of xpyb.
