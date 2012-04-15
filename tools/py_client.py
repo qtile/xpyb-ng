@@ -45,7 +45,7 @@ def _py_setlevel(idx):
     while len(_pylines) <= idx:
         _pylines.append([])
     _pylevel = idx
-    
+
 def _t(str):
     '''
     Does Python-name conversion on a type tuple of strings.
@@ -92,7 +92,7 @@ def _py_flush_format():
     _py_fmt_size = 0
     _py_fmt_list = []
     return retval
-    
+
 def py_open(self):
     '''
     Exported function that handles module open.
@@ -111,7 +111,7 @@ def py_open(self):
     _py('import cStringIO')
     _py('from struct import pack, unpack_from')
     _py('from array import array')
-        
+
     if _ns.is_ext:
         for (n, h) in self.imports:
             _py('import %s', h)
@@ -142,7 +142,7 @@ def py_open(self):
         _py('xcb._add_ext(key, %sExtension, _events, _errors)', _ns.header)
     else:
         _py('xcb._add_core(%sExtension, Setup, _events, _errors)', _ns.header)
-    
+
 
 def py_close(self):
     '''
@@ -255,7 +255,8 @@ def _py_get_length_field(expr):
     '''
     if expr.lenfield_name != None:
         # This would be nicer if Request had an is_request attribute...
-        if hasattr(expr.parent.parent, "opcode"):
+        if (hasattr(expr.parent, "parent") and
+                hasattr(expr.parent.parent, "opcode")):
             return expr.lenfield_name
         else:
             return 'self.%s' % expr.lenfield_name
@@ -291,7 +292,7 @@ def _py_type_alignsize(field):
     if field.type.is_container:
         return field.type.size if field.type.fixed_size() else 4
     return field.type.size
-        
+
 def _py_complex(self, name):
     need_alignment = False
     _py('        count = 0')
@@ -407,7 +408,7 @@ def _py_reply(self, name):
     _py('        xcb.Reply.__init__(self, parent)')
 
     _py_complex(self, name)
-    
+
 def _py_request_helper(self, name, void, regular):
     '''
     Declares a request function.
